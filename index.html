@@ -16,13 +16,19 @@ body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; user-s
 #moves { color:#ffdd88; font-weight:bold; }
 #status { color:#88ffdd; }
 #controls {
-  position:absolute; top:60px; left:50%; transform:translateX(-50%);
-  display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
-  z-index:10; max-width:620px;
+  position:absolute; top:16px; left:50%; transform:translateX(-50%);
+  display:flex; gap:10px; z-index:10; align-items:center;
 }
-.grp { display:flex; flex-direction:column; align-items:center; gap:3px; }
-.grp label { color:#aaa; font-size:11px; }
-.row { display:flex; gap:4px; }
+.axis { color:#fff; font-size:13px; font-weight:bold; display:flex; gap:4px; align-items:center; }
+.axis span { padding:5px 10px; border-radius:7px; cursor:pointer; font-family:monospace; font-size:13px; transition:background .12s, transform .08s; }
+.axis span:hover { transform:scale(1.08); }
+.xax span { background:#7a1a1a; color:#ff8888; }
+.xax span:hover { background:#aa2222; }
+.yax span { background:#1a5c1a; color:#88ff88; }
+.yax span:hover { background:#228822; }
+.zax span { background:#1a1a7a; color:#8888ff; }
+.zax span:hover { background:#2222aa; }
+.sep { color:#444; font-size:18px; }
 button {
   padding:7px 13px; font-size:13px; font-weight:bold;
   border:none; border-radius:8px; cursor:pointer;
@@ -40,40 +46,24 @@ button:active { transform:scale(0.96); }
 </head>
 <body>
 
-<div id="info">
-  Tahy: <span id="moves">0</span> &nbsp;|&nbsp;
-  <span id="status">Táhni dílkem pro tah · jinde pro otočení pohledu</span>
-</div>
-
 <div id="controls">
-  <div class="grp"><label>Pravá (R)</label><div class="row">
-    <button onclick="doMove('R')">R</button>
-    <button class="inv" onclick="doMove('Ri')">R'</button>
-  </div></div>
-  <div class="grp"><label>Levá (L)</label><div class="row">
-    <button onclick="doMove('L')">L</button>
-    <button class="inv" onclick="doMove('Li')">L'</button>
-  </div></div>
-  <div class="grp"><label>Horní (U)</label><div class="row">
-    <button onclick="doMove('U')">U</button>
-    <button class="inv" onclick="doMove('Ui')">U'</button>
-  </div></div>
-  <div class="grp"><label>Dolní (D)</label><div class="row">
-    <button onclick="doMove('D')">D</button>
-    <button class="inv" onclick="doMove('Di')">D'</button>
-  </div></div>
-  <div class="grp"><label>Přední (F)</label><div class="row">
-    <button onclick="doMove('F')">F</button>
-    <button class="inv" onclick="doMove('Fi')">F'</button>
-  </div></div>
-  <div class="grp"><label>Zadní (B)</label><div class="row">
-    <button onclick="doMove('B')">B</button>
-    <button class="inv" onclick="doMove('Bi')">B'</button>
-  </div></div>
-  <div class="grp"><label>&nbsp;</label><div class="row">
-    <button class="go" onclick="scramble()">🔀 Zamíchat</button>
-    <button class="rst" onclick="resetCube()">↺ Reset</button>
-  </div></div>
+  <div class="axis xax">
+    <span onclick="doMove('R')">+X</span>
+    <span onclick="doMove('Ri')">−X</span>
+  </div>
+  <div class="sep">·</div>
+  <div class="axis yax">
+    <span onclick="doMove('U')">+Y</span>
+    <span onclick="doMove('Ui')">−Y</span>
+  </div>
+  <div class="sep">·</div>
+  <div class="axis zax">
+    <span onclick="doMove('F')">+Z</span>
+    <span onclick="doMove('Fi')">−Z</span>
+  </div>
+  <div class="sep">·</div>
+  <button class="go" onclick="scramble()">Zamíchat</button>
+  <button class="rst" onclick="resetCube()">Reset</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -208,7 +198,6 @@ function processQueue() {
     }
     scene.remove(pivot);
     moveCount++;
-    document.getElementById('moves').textContent=moveCount;
     setTimeout(processQueue,0);
   }
   requestAnimationFrame(frame);
@@ -223,17 +212,12 @@ function scramble() {
     last=m; animQueue.push(m);
   }
   moveCount=0;
-  document.getElementById('moves').textContent=0;
-  document.getElementById('status').textContent='Zamícháno — vyřeš kostku! 🧩';
   if(!animating) processQueue();
 }
 
 function resetCube() {
   animQueue=[]; animating=false; moveCount=0;
-  document.getElementById('moves').textContent=0;
-  document.getElementById('status').textContent='Resetováno ✓';
   buildCube();
-  setTimeout(function(){ document.getElementById('status').textContent='Táhni dílkem pro tah · jinde pro otočení pohledu'; },1500);
 }
 
 // ─── DRAG TO TURN ─────────────────────────────────────────────
