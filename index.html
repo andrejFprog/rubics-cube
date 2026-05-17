@@ -28,7 +28,7 @@ body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; user-s
 .yax span:hover { background:#228822; }
 .zax span { background:#1a1a7a; color:#8888ff; }
 .zax span:hover { background:#2222aa; }
-.sep { color:#444; font-size:18px; }
+#counter { color:#fff; font-size:14px; background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:8px; }
 button {
   padding:7px 13px; font-size:13px; font-weight:bold;
   border:none; border-radius:8px; cursor:pointer;
@@ -47,21 +47,7 @@ button:active { transform:scale(0.96); }
 <body>
 
 <div id="controls">
-  <div class="axis xax">
-    <span onclick="doMove('R')">+X</span>
-    <span onclick="doMove('Ri')">−X</span>
-  </div>
-  <div class="sep">·</div>
-  <div class="axis yax">
-    <span onclick="doMove('U')">+Y</span>
-    <span onclick="doMove('Ui')">−Y</span>
-  </div>
-  <div class="sep">·</div>
-  <div class="axis zax">
-    <span onclick="doMove('F')">+Z</span>
-    <span onclick="doMove('Fi')">−Z</span>
-  </div>
-  <div class="sep">·</div>
+  <span id="counter">Tahy: <b>0</b></span>
   <button class="go" onclick="scramble()">Zamíchat</button>
   <button class="rst" onclick="resetCube()">Reset</button>
 </div>
@@ -198,6 +184,7 @@ function processQueue() {
     }
     scene.remove(pivot);
     moveCount++;
+    document.getElementById('counter').innerHTML = 'Tahy: <b>' + moveCount + '</b>';
     setTimeout(processQueue,0);
   }
   requestAnimationFrame(frame);
@@ -217,6 +204,7 @@ function scramble() {
 
 function resetCube() {
   animQueue=[]; animating=false; moveCount=0;
+  document.getElementById('counter').innerHTML = 'Tahy: <b>0</b>';
   buildCube();
 }
 
