@@ -2,10 +2,11 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rubikova kostka 3×3</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; }
+body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; user-select:none; }
 #info {
   position:absolute; top:12px; left:50%; transform:translateX(-50%);
   color:#fff; background:rgba(0,0,0,0.65); padding:8px 20px;
@@ -41,7 +42,7 @@ button:active { transform:scale(0.96); }
 
 <div id="info">
   Tahy: <span id="moves">0</span> &nbsp;|&nbsp;
-  <span id="status">Táhni myší pro otočení · tlačítka pro tahy</span>
+  <span id="status">Táhni dílkem pro tah · jinde pro otočení pohledu</span>
 </div>
 
 <div id="controls">
@@ -83,14 +84,10 @@ var animating = false;
 var moveCount = 0;
 var rotX = 0.42;
 var rotY = 0.55;
-var dragging = false;
-var px = 0, py = 0;
 
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
-
 var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
-
 var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
@@ -98,11 +95,9 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 var dl = new THREE.DirectionalLight(0xffffff, 0.75);
-dl.position.set(6, 10, 8);
-scene.add(dl);
+dl.position.set(6, 10, 8); scene.add(dl);
 var dl2 = new THREE.DirectionalLight(0x8899ff, 0.25);
-dl2.position.set(-5, -4, -6);
-scene.add(dl2);
+dl2.position.set(-5, -4, -6); scene.add(dl2);
 
 window.addEventListener('resize', function () {
   camera.aspect = innerWidth / innerHeight;
@@ -110,15 +105,9 @@ window.addEventListener('resize', function () {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-var SZ   = 1.0;
-var GAP  = 0.055;
-var STEP = SZ + GAP;
-var SI   = 0.42;
-var SD   = 0.028;
-var H    = SZ / 2;
-
+var SZ = 1.0, GAP = 0.055, STEP = SZ + GAP, SI = 0.42, SD = 0.028, H = SZ / 2;
 var BLACK = 0x111111;
-var FACE_HEX = { U:0xffffff, D:0xffdd00, F:0xee2211, B:0xff7700, R:0x1177ee, L:0x22bb44 };
+var FACE_HEX = { U:0xffdd00, D:0xffffff, F:0xff7700, B:0xee2211, R:0x1177ee, L:0x22bb44 };
 
 function makeGeo(slot) {
   if (slot === 0 || slot === 1) return new THREE.BoxGeometry(SD,   SI*2, SI*2);
@@ -127,206 +116,386 @@ function makeGeo(slot) {
 }
 
 var SLOT = [
-  { pos: [ H+SD,    0,      0    ], face: 'R' },
-  { pos: [-(H+SD),  0,      0    ], face: 'L' },
-  { pos: [ 0,    H+SD,      0    ], face: 'U' },
-  { pos: [ 0,  -(H+SD),     0    ], face: 'D' },
-  { pos: [ 0,      0,    H+SD    ], face: 'F' },
-  { pos: [ 0,      0,  -(H+SD)   ], face: 'B' },
+  { pos: [ H+SD,   0,      0    ], face:'R' },
+  { pos: [-(H+SD), 0,      0    ], face:'L' },
+  { pos: [ 0,    H+SD,     0    ], face:'U' },
+  { pos: [ 0,  -(H+SD),    0    ], face:'D' },
+  { pos: [ 0,    0,     H+SD    ], face:'F' },
+  { pos: [ 0,    0,   -(H+SD)   ], face:'B' },
 ];
 
 function createCubie(gx, gy, gz) {
   var group = new THREE.Group();
   group.position.set(gx * STEP, gy * STEP, gz * STEP);
-
-  group.add(new THREE.Mesh(
-    new THREE.BoxGeometry(SZ, SZ, SZ),
-    new THREE.MeshLambertMaterial({ color: BLACK })
-  ));
-
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(SZ,SZ,SZ), new THREE.MeshLambertMaterial({ color:BLACK })));
   var exposed = new Set();
-  if (gx ===  1) exposed.add(0);
-  if (gx === -1) exposed.add(1);
-  if (gy ===  1) exposed.add(2);
-  if (gy === -1) exposed.add(3);
-  if (gz ===  1) exposed.add(4);
-  if (gz === -1) exposed.add(5);
-
+  if (gx===1) exposed.add(0); if (gx===-1) exposed.add(1);
+  if (gy===1) exposed.add(2); if (gy===-1) exposed.add(3);
+  if (gz===1) exposed.add(4); if (gz===-1) exposed.add(5);
   for (var i = 0; i < 6; i++) {
-    var color = exposed.has(i) ? FACE_HEX[SLOT[i].face] : BLACK;
-    var mesh  = new THREE.Mesh(
-      makeGeo(i),
-      new THREE.MeshLambertMaterial({ color: color })
-    );
+    var mesh = new THREE.Mesh(makeGeo(i), new THREE.MeshLambertMaterial({ color: exposed.has(i) ? FACE_HEX[SLOT[i].face] : BLACK }));
     mesh.position.set(SLOT[i].pos[0], SLOT[i].pos[1], SLOT[i].pos[2]);
     group.add(mesh);
   }
-
-  return { group: group, gx: gx, gy: gy, gz: gz };
+  return { group:group, gx:gx, gy:gy, gz:gz };
 }
 
 function buildCube() {
   for (var i = 0; i < cubies.length; i++) scene.remove(cubies[i].group);
   cubies = [];
-  for (var gx = -1; gx <= 1; gx++)
-    for (var gy = -1; gy <= 1; gy++)
-      for (var gz = -1; gz <= 1; gz++) {
-        var c = createCubie(gx, gy, gz);
+  for (var gx=-1; gx<=1; gx++)
+    for (var gy=-1; gy<=1; gy++)
+      for (var gz=-1; gz<=1; gz++) {
+        var c = createCubie(gx,gy,gz);
         scene.add(c.group);
         cubies.push(c);
       }
 }
 
 var LAYER_FILTER = {
-  R: function(c){ return c.gx ===  1; },
-  L: function(c){ return c.gx === -1; },
-  U: function(c){ return c.gy ===  1; },
-  D: function(c){ return c.gy === -1; },
-  F: function(c){ return c.gz ===  1; },
-  B: function(c){ return c.gz === -1; },
+  R:function(c){return c.gx===1;},  L:function(c){return c.gx===-1;},
+  U:function(c){return c.gy===1;},  D:function(c){return c.gy===-1;},
+  F:function(c){return c.gz===1;},  B:function(c){return c.gz===-1;},
 };
-
 var MOVE_AXIS = {
-  R:  new THREE.Vector3( 1, 0, 0), Ri: new THREE.Vector3(-1, 0, 0),
-  L:  new THREE.Vector3(-1, 0, 0), Li: new THREE.Vector3( 1, 0, 0),
-  U:  new THREE.Vector3( 0, 1, 0), Ui: new THREE.Vector3( 0,-1, 0),
-  D:  new THREE.Vector3( 0,-1, 0), Di: new THREE.Vector3( 0, 1, 0),
-  F:  new THREE.Vector3( 0, 0, 1), Fi: new THREE.Vector3( 0, 0,-1),
-  B:  new THREE.Vector3( 0, 0,-1), Bi: new THREE.Vector3( 0, 0, 1),
+  R: new THREE.Vector3(1,0,0),  Ri: new THREE.Vector3(-1,0,0),
+  L: new THREE.Vector3(-1,0,0), Li: new THREE.Vector3(1,0,0),
+  U: new THREE.Vector3(0,1,0),  Ui: new THREE.Vector3(0,-1,0),
+  D: new THREE.Vector3(0,-1,0), Di: new THREE.Vector3(0,1,0),
+  F: new THREE.Vector3(0,0,1),  Fi: new THREE.Vector3(0,0,-1),
+  B: new THREE.Vector3(0,0,-1), Bi: new THREE.Vector3(0,0,1),
 };
-
-var MOVE_BASE = {
-  R:'R',Ri:'R', L:'L',Li:'L', U:'U',Ui:'U',
-  D:'D',Di:'D', F:'F',Fi:'F', B:'B',Bi:'B',
-};
-
+var MOVE_BASE = { R:'R',Ri:'R',L:'L',Li:'L',U:'U',Ui:'U',D:'D',Di:'D',F:'F',Fi:'F',B:'B',Bi:'B' };
 var ANIM_MS = 130;
 
-function ease(t) { return t * t * (3 - 2 * t); }
+function ease(t) { return t*t*(3-2*t); }
 
 var SNAPS = [0, 0.5, Math.SQRT1_2, Math.sqrt(0.75), 1];
-
 function snapComp(v) {
-  var best = 0, bd = Infinity;
-  for (var si = 0; si < SNAPS.length; si++) {
-    for (var sg = -1; sg <= 1; sg += 2) {
-      var d = Math.abs(v - sg * SNAPS[si]);
-      if (d < bd) { bd = d; best = sg * SNAPS[si]; }
-    }
-  }
+  var best=0, bd=Infinity;
+  for (var si=0; si<SNAPS.length; si++)
+    for (var sg=-1; sg<=1; sg+=2) { var d=Math.abs(v-sg*SNAPS[si]); if(d<bd){bd=d;best=sg*SNAPS[si];} }
   return best;
 }
-
 function snapQuat(obj) {
-  var q = obj.quaternion;
-  q.set(snapComp(q.x), snapComp(q.y), snapComp(q.z), snapComp(q.w));
+  var q=obj.quaternion;
+  q.set(snapComp(q.x),snapComp(q.y),snapComp(q.z),snapComp(q.w));
   q.normalize();
 }
 
 function processQueue() {
-  if (!animQueue.length) { animating = false; return; }
-  animating = true;
-  var mv       = animQueue.shift();
-  var base     = MOVE_BASE[mv];
-  var axis     = MOVE_AXIS[mv];
-  var affected = cubies.filter(LAYER_FILTER[base]);
-
-  var pivot = new THREE.Group();
-  scene.add(pivot);
-  for (var i = 0; i < affected.length; i++) pivot.attach(affected[i].group);
-
-  var t0 = performance.now();
-  var prevAngle = 0;
-
+  if (!animQueue.length) { animating=false; return; }
+  animating=true;
+  var mv=animQueue.shift(), base=MOVE_BASE[mv], axis=MOVE_AXIS[mv];
+  var affected=cubies.filter(LAYER_FILTER[base]);
+  var pivot=new THREE.Group(); scene.add(pivot);
+  for (var i=0;i<affected.length;i++) pivot.attach(affected[i].group);
+  var t0=performance.now(), prevAngle=0;
   function frame(now) {
-    var t     = Math.min(1, (now - t0) / ANIM_MS);
-    var angle = ease(t) * (Math.PI / 2);
-    pivot.rotateOnAxis(axis, angle - prevAngle);
-    prevAngle = angle;
-
-    if (t < 1) { requestAnimationFrame(frame); return; }
-
-    for (var i = 0; i < affected.length; i++) {
-      var c = affected[i];
-      scene.attach(c.group);
-      var nx = Math.round(c.group.position.x / STEP) * STEP;
-      var ny = Math.round(c.group.position.y / STEP) * STEP;
-      var nz = Math.round(c.group.position.z / STEP) * STEP;
-      c.group.position.set(nx, ny, nz);
-      c.gx = Math.round(nx / STEP);
-      c.gy = Math.round(ny / STEP);
-      c.gz = Math.round(nz / STEP);
+    var t=Math.min(1,(now-t0)/ANIM_MS);
+    var angle=ease(t)*(Math.PI/2);
+    pivot.rotateOnAxis(axis, angle-prevAngle);
+    prevAngle=angle;
+    if (t<1) { requestAnimationFrame(frame); return; }
+    for (var i=0;i<affected.length;i++) {
+      var c=affected[i]; scene.attach(c.group);
+      var nx=Math.round(c.group.position.x/STEP)*STEP;
+      var ny=Math.round(c.group.position.y/STEP)*STEP;
+      var nz=Math.round(c.group.position.z/STEP)*STEP;
+      c.group.position.set(nx,ny,nz);
+      c.gx=Math.round(nx/STEP); c.gy=Math.round(ny/STEP); c.gz=Math.round(nz/STEP);
       snapQuat(c.group);
     }
-
     scene.remove(pivot);
     moveCount++;
-    document.getElementById('moves').textContent = moveCount;
-    setTimeout(processQueue, 0);
+    document.getElementById('moves').textContent=moveCount;
+    setTimeout(processQueue,0);
   }
-
   requestAnimationFrame(frame);
 }
 
-function doMove(mv) {
-  animQueue.push(mv);
-  if (!animating) processQueue();
-}
+function doMove(mv) { animQueue.push(mv); if(!animating) processQueue(); }
 
 function scramble() {
-  var mvs = ['R','Ri','L','Li','U','Ui','D','Di','F','Fi','B','Bi'];
-  var last = '';
-  for (var i = 0; i < 20; i++) {
-    var m;
-    do { m = mvs[Math.floor(Math.random() * mvs.length)]; } while (m === last);
-    last = m;
-    animQueue.push(m);
+  var mvs=['R','Ri','L','Li','U','Ui','D','Di','F','Fi','B','Bi'], last='';
+  for (var i=0;i<20;i++) {
+    var m; do { m=mvs[Math.floor(Math.random()*mvs.length)]; } while(m===last);
+    last=m; animQueue.push(m);
   }
-  moveCount = 0;
-  document.getElementById('moves').textContent = 0;
-  document.getElementById('status').textContent = 'Zamícháno — vyřeš kostku! 🧩';
-  if (!animating) processQueue();
+  moveCount=0;
+  document.getElementById('moves').textContent=0;
+  document.getElementById('status').textContent='Zamícháno — vyřeš kostku! 🧩';
+  if(!animating) processQueue();
 }
 
 function resetCube() {
-  animQueue = [];
-  animating = false;
-  moveCount = 0;
-  document.getElementById('moves').textContent = 0;
-  document.getElementById('status').textContent = 'Resetováno ✓';
+  animQueue=[]; animating=false; moveCount=0;
+  document.getElementById('moves').textContent=0;
+  document.getElementById('status').textContent='Resetováno ✓';
   buildCube();
-  setTimeout(function () {
-    document.getElementById('status').textContent = 'Táhni myší pro otočení · tlačítka pro tahy';
-  }, 1500);
+  setTimeout(function(){ document.getElementById('status').textContent='Táhni dílkem pro tah · jinde pro otočení pohledu'; },1500);
 }
+
+// ─── DRAG TO TURN ─────────────────────────────────────────────
+// Raycaster pro detekci kliknutého dílku
+var raycaster = new THREE.Raycaster();
+var mouse2d   = new THREE.Vector2();
+
+// Stav dragu
+var dragState = null;
+// dragState = {
+//   mode: 'orbit' | 'turn',
+//   startX, startY,
+//   hitCubie, hitFaceNormal (world), hitFaceIndex,
+//   moved: bool
+// }
 
 var CAM_R = 13.0;
 
-renderer.domElement.addEventListener('mousedown', function (e) {
-  dragging = true; px = e.clientX; py = e.clientY;
-});
-window.addEventListener('mouseup', function () { dragging = false; });
-window.addEventListener('mousemove', function (e) {
-  if (!dragging) return;
-  rotY -= (e.clientX - px) * 0.006;
-  rotX -= (e.clientY - py) * 0.006;
-  rotX = Math.max(-1.4, Math.min(1.4, rotX));
-  px = e.clientX; py = e.clientY;
-});
-renderer.domElement.addEventListener('touchstart', function (e) {
-  dragging = true; px = e.touches[0].clientX; py = e.touches[0].clientY;
-  e.preventDefault();
-}, { passive: false });
-window.addEventListener('touchend', function () { dragging = false; });
-window.addEventListener('touchmove', function (e) {
-  if (!dragging) return;
-  rotY -= (e.touches[0].clientX - px) * 0.006;
-  rotX -= (e.touches[0].clientY - py) * 0.006;
-  rotX = Math.max(-1.4, Math.min(1.4, rotX));
-  px = e.touches[0].clientX; py = e.touches[0].clientY;
-  e.preventDefault();
-}, { passive: false });
+function getMouseNDC(clientX, clientY) {
+  return new THREE.Vector2(
+    (clientX / innerWidth)  *  2 - 1,
+    (clientY / innerHeight) * -2 + 1
+  );
+}
 
+// Najde cubie a normálu zasažené plochy pod kurzorem
+function raycastCube(clientX, clientY) {
+  var ndc = getMouseNDC(clientX, clientY);
+  raycaster.setFromCamera(ndc, camera);
+  // Sbírej všechny meshe ze všech cubies
+  var meshes = [];
+  for (var i=0;i<cubies.length;i++) {
+    var g=cubies[i].group;
+    for (var j=0;j<g.children.length;j++) meshes.push(g.children[j]);
+  }
+  var hits = raycaster.intersectObjects(meshes);
+  if (!hits.length) return null;
+  var hit = hits[0];
+  // Najdi který cubie patří zasaženému objektu
+  var hitCubie = null;
+  for (var i=0;i<cubies.length;i++) {
+    if (cubies[i].group.children.indexOf(hit.object) !== -1) { hitCubie=cubies[i]; break; }
+  }
+  if (!hitCubie) return null;
+  // Normála v world space
+  var normal = hit.face.normal.clone();
+  normal.transformDirection(hit.object.matrixWorld);
+  return { cubie: hitCubie, normal: normal, point: hit.point };
+}
+
+// Ze směru tahu myší a normály zasažené plochy urči tah kostky
+function inferMove(hitNormal, dragDx, dragDy) {
+  // Normála zaokrouhlená na osu
+  var nx=Math.round(hitNormal.x), ny=Math.round(hitNormal.y), nz=Math.round(hitNormal.z);
+
+  // Směr tahu v camera space → world space (jen horizontální rovinu)
+  // Kamera orbita: rotX, rotY
+  // Pohyb myší dx = doprava na obrazovce, dy = dolů
+  // Spočítám "right" a "up" vektory kamery v world space
+  var sinY=Math.sin(rotY), cosY=Math.cos(rotY);
+  var sinX=Math.sin(rotX), cosX=Math.cos(rotX);
+
+  // Camera right vector (perpendicular to view, horizontal)
+  var camRight = new THREE.Vector3(cosY, 0, -sinY).normalize();
+  // Camera up vector
+  var camUp    = new THREE.Vector3(sinY*sinX, cosX, cosY*sinX).normalize();
+
+  // Drag vector in world space (invertujeme dy protože screen y je dolů)
+  var dragWorld = new THREE.Vector3()
+    .addScaledVector(camRight,  dragDx)
+    .addScaledVector(camUp,    -dragDy);
+
+  // Osa rotace = křížový součin normály plochy a drag vektoru
+  var faceNorm = new THREE.Vector3(nx, ny, nz);
+  var rotAxis  = new THREE.Vector3().crossVectors(faceNorm, dragWorld).normalize();
+
+  // Zaokrouhlíme rotAxis na nejbližší světovou osu
+  var ax=Math.abs(rotAxis.x), ay=Math.abs(rotAxis.y), az=Math.abs(rotAxis.z);
+  var move='';
+
+  if (ax>=ay && ax>=az) {
+    // Osa X → L nebo R
+    if (nx===1 || nx===-1) {
+      // kliknuto na R nebo L stěnu, osa je X → nemůžeme rotovat R/L po X, vezmi Y nebo Z
+      // fallback: porovnej dy vs dx
+      if (Math.abs(dragDy) > Math.abs(dragDx)) {
+        // Vertical drag on R/L face → F nebo B
+        move = (nz===0) ? (dragDy<0 ? 'U':'D') : (dragDz>0 ? 'F':'B');
+      }
+    }
+    var cubie = dragState.cubie;
+    // Vrstva podle nx/ny/nz
+    if (nx===1)  move=(rotAxis.x>0)?'R':'Ri';
+    else if (nx===-1) move=(rotAxis.x>0)?'Li':'L';
+    else {
+      // rotAxis.x dominuje ale klikli jsme ne na X stěnu → vrstva podle cubie
+      var cx=cubie.gx;
+      if (cx===1) move=(rotAxis.x>0)?'R':'Ri';
+      else if (cx===-1) move=(rotAxis.x>0)?'Li':'L';
+      else move=(rotAxis.x>0)?'Ri':'R'; // střední vrstva, zjednodušení
+    }
+  } else if (ay>=ax && ay>=az) {
+    // Osa Y → U nebo D
+    var cubie=dragState.cubie;
+    var cy=cubie.gy;
+    if (rotAxis.y>0) { move=(cy===1)?'U':(cy===-1)?'Di':'U'; }
+    else             { move=(cy===1)?'Ui':(cy===-1)?'D':'Ui'; }
+  } else {
+    // Osa Z → F nebo B
+    var cubie=dragState.cubie;
+    var cz=cubie.gz;
+    if (rotAxis.z>0) { move=(cz===1)?'F':(cz===-1)?'Bi':'F'; }
+    else             { move=(cz===1)?'Fi':(cz===-1)?'B':'Fi'; }
+  }
+
+  return move;
+}
+
+// Přepracovaná verze — čistší logika
+function inferMove2(hitNormal, dragDx, dragDy, hitCubie) {
+  var nx=Math.round(hitNormal.x), ny=Math.round(hitNormal.y), nz=Math.round(hitNormal.z);
+
+  // Camera vectors
+  var sinY=Math.sin(rotY), cosY=Math.cos(rotY);
+  var sinX=Math.sin(rotX), cosX=Math.cos(rotX);
+  var camRight = new THREE.Vector3( cosY,       0,    -sinY);
+  var camUp    = new THREE.Vector3( sinY*sinX,  cosX,  cosY*sinX);
+
+  // World-space drag direction
+  var drag = new THREE.Vector3()
+    .addScaledVector(camRight,  dragDx)
+    .addScaledVector(camUp,    -dragDy)
+    .normalize();
+
+  // Projektuj drag na rovinu zasažené plochy (odeber normálovou složku)
+  var faceN = new THREE.Vector3(nx, ny, nz);
+  drag.addScaledVector(faceN, -drag.dot(faceN)).normalize();
+
+  // Zaokrouhli na nejbližší světovou osu
+  var best=null, bestDot=0;
+  var axes=[
+    new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
+    new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
+    new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1),
+  ];
+  for (var i=0;i<axes.length;i++) {
+    var d=drag.dot(axes[i]);
+    if (d>bestDot) { bestDot=d; best=axes[i]; }
+  }
+  if (!best) return null;
+
+  // Osa rotace = faceN × drag_axis
+  var rotA = new THREE.Vector3().crossVectors(faceN, best).normalize();
+
+  // Zaokrouhli rotA
+  var rx=Math.round(rotA.x), ry=Math.round(rotA.y), rz=Math.round(rotA.z);
+
+  // Urči vrstvu a směr
+  var cx=hitCubie.gx, cy=hitCubie.gy, cz=hitCubie.gz;
+
+  if (ry!==0) {
+    // Rotace kolem Y → vrstva podle cy
+    var layer=(cy===1)?'U':(cy===-1)?'D':'U';
+    if (layer==='U') return ry>0?'U':'Ui';
+    else             return ry>0?'Di':'D';
+  }
+  if (rx!==0) {
+    var layer=(cx===1)?'R':(cx===-1)?'L':'R';
+    if (layer==='R') return rx>0?'R':'Ri';
+    else             return rx>0?'Li':'L';
+  }
+  if (rz!==0) {
+    var layer=(cz===1)?'F':(cz===-1)?'B':'F';
+    if (layer==='F') return rz>0?'F':'Fi';
+    else             return rz>0?'Bi':'B';
+  }
+  return null;
+}
+
+// ─── INPUT HANDLERS ───────────────────────────────────────────
+var DRAG_THRESHOLD = 8; // px — kolik musíš táhnout než se rozhodne orbit vs turn
+
+function onPointerDown(clientX, clientY) {
+  var hit = raycastCube(clientX, clientY);
+  dragState = {
+    mode: 'undecided',
+    startX: clientX, startY: clientY,
+    hit: hit,
+    moved: false,
+  };
+}
+
+function onPointerMove(clientX, clientY) {
+  if (!dragState) return;
+
+  var dx = clientX - dragState.startX;
+  var dy = clientY - dragState.startY;
+  var dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dragState.mode === 'undecided') {
+    if (dist < DRAG_THRESHOLD) return; // čekáme
+    // Rozhodnutí: je pod prstem kubie? → turn, jinak orbit
+    dragState.mode = dragState.hit ? 'turn' : 'orbit';
+    dragState.lastX = dragState.startX;
+    dragState.lastY = dragState.startY;
+  }
+
+  var ldx = clientX - dragState.lastX;
+  var ldy = clientY - dragState.lastY;
+  dragState.lastX = clientX;
+  dragState.lastY = clientY;
+
+  if (dragState.mode === 'orbit') {
+    rotY -= ldx * 0.006;
+    rotX += ldy * 0.006;
+    rotX = Math.max(-1.4, Math.min(1.4, rotX));
+  }
+  // turn se provede při pointerUp pro jistotu
+}
+
+function onPointerUp(clientX, clientY) {
+  if (!dragState) return;
+
+  var dx = clientX - dragState.startX;
+  var dy = clientY - dragState.startY;
+  var dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dragState.mode === 'turn' && dist >= DRAG_THRESHOLD && dragState.hit) {
+    var mv = inferMove2(dragState.hit.normal, dx, dy, dragState.hit.cubie);
+    if (mv) doMove(mv);
+  }
+
+  dragState = null;
+}
+
+// Mouse
+renderer.domElement.addEventListener('mousedown', function(e) {
+  onPointerDown(e.clientX, e.clientY);
+});
+window.addEventListener('mousemove', function(e) {
+  onPointerMove(e.clientX, e.clientY);
+});
+window.addEventListener('mouseup', function(e) {
+  onPointerUp(e.clientX, e.clientY);
+});
+
+// Touch
+renderer.domElement.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive:false });
+window.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive:false });
+window.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  var t = e.changedTouches[0];
+  onPointerUp(t.clientX, t.clientY);
+}, { passive:false });
+
+// ─── RENDER LOOP ──────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
   camera.position.set(
@@ -334,7 +503,7 @@ function animate() {
     CAM_R * Math.sin(rotX),
     CAM_R * Math.cos(rotY) * Math.cos(rotX)
   );
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(0,0,0);
   renderer.render(scene, camera);
 }
 
