@@ -1,41 +1,41 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8">
-  <title>Rubikova kostka 3×3</title>
-  <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; }
-      #info {
-          position:absolute; top:12px; left:50%; transform:translateX(-50%);
-          color:#fff; background:rgba(0,0,0,0.65); padding:8px 20px;
-          border-radius:20px; font-size:14px; text-align:center; z-index:10;
-          white-space:nowrap;
-      }
-      #moves { color:#ffdd88; font-weight:bold; }
-      #status { color:#88ffdd; }
-      #controls {
-          position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
-          display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
-          z-index:10; max-width:620px;
-      }
-      .grp { display:flex; flex-direction:column; align-items:center; gap:3px; }
-      .grp label { color:#aaa; font-size:11px; }
-      .row { display:flex; gap:4px; }
-      button {
-          padding:7px 13px; font-size:13px; font-weight:bold;
-          border:none; border-radius:8px; cursor:pointer;
-          background:#2d2d5e; color:#fff; transition:background .12s, transform .08s;
-      }
-      button:hover { background:#4444aa; transform:scale(1.06); }
-      button:active { transform:scale(0.96); }
-      .inv { background:#3a2d5e; color:#d0b0ff; }
-      .inv:hover { background:#6644aa; }
-      .go { background:#1a5c3a; color:#7fffb0; }
-      .go:hover { background:#2a8c5a; }
-      .rst { background:#5c1a1a; color:#ffaaaa; }
-      .rst:hover { background:#8c2a2a; }
-  </style>
+<meta charset="UTF-8">
+<title>Rubikova kostka 3×3</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; }
+#info {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  color:#fff; background:rgba(0,0,0,0.65); padding:8px 20px;
+  border-radius:20px; font-size:14px; text-align:center; z-index:10;
+  white-space:nowrap;
+}
+#moves { color:#ffdd88; font-weight:bold; }
+#status { color:#88ffdd; }
+#controls {
+  position:absolute; top:60px; left:50%; transform:translateX(-50%);
+  display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+  z-index:10; max-width:620px;
+}
+.grp { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.grp label { color:#aaa; font-size:11px; }
+.row { display:flex; gap:4px; }
+button {
+  padding:7px 13px; font-size:13px; font-weight:bold;
+  border:none; border-radius:8px; cursor:pointer;
+  background:#2d2d5e; color:#fff; transition:background .12s, transform .08s;
+}
+button:hover { background:#4444aa; transform:scale(1.06); }
+button:active { transform:scale(0.96); }
+.inv { background:#3a2d5e; color:#d0b0ff; }
+.inv:hover { background:#6644aa; }
+.go { background:#1a5c3a; color:#7fffb0; }
+.go:hover { background:#2a8c5a; }
+.rst { background:#5c1a1a; color:#ffaaaa; }
+.rst:hover { background:#8c2a2a; }
+</style>
 </head>
 <body>
 
@@ -77,290 +77,269 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-  // ─── ALL STATE up front — no hoisting surprises ───────────────
-  var cubies    = [];
-  var animQueue = [];
-  var animating = false;
-  var moveCount = 0;
-  var rotX = 0.42;
-  var rotY = 0.55;
-  var dragging = false;
-  var px = 0, py = 0;
+var cubies    = [];
+var animQueue = [];
+var animating = false;
+var moveCount = 0;
+var rotX = 0.42;
+var rotY = 0.55;
+var dragging = false;
+var px = 0, py = 0;
 
-  // ─── Scene ────────────────────────────────────────────────────
-  var scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
 
-  var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
 
-  var renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(devicePixelRatio);
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+var dl = new THREE.DirectionalLight(0xffffff, 0.75);
+dl.position.set(6, 10, 8);
+scene.add(dl);
+var dl2 = new THREE.DirectionalLight(0x8899ff, 0.25);
+dl2.position.set(-5, -4, -6);
+scene.add(dl2);
+
+window.addEventListener('resize', function () {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  document.body.appendChild(renderer.domElement);
+});
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  var dl = new THREE.DirectionalLight(0xffffff, 0.75);
-  dl.position.set(6, 10, 8);
-  scene.add(dl);
-  var dl2 = new THREE.DirectionalLight(0x8899ff, 0.25);
-  dl2.position.set(-5, -4, -6);
-  scene.add(dl2);
+var SZ   = 1.0;
+var GAP  = 0.055;
+var STEP = SZ + GAP;
+var SI   = 0.42;
+var SD   = 0.028;
+var H    = SZ / 2;
 
-  window.addEventListener('resize', function () {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
+var BLACK = 0x111111;
+var FACE_HEX = { U:0xffffff, D:0xffdd00, F:0xee2211, B:0xff7700, R:0x1177ee, L:0x22bb44 };
 
-  // ─── Constants ────────────────────────────────────────────────
-  var SZ   = 1.0;
-  var GAP  = 0.055;
-  var STEP = SZ + GAP;
-  var SI   = 0.42;   // sticker half-size
-  var SD   = 0.028;  // sticker protrusion
-  var H    = SZ / 2; // cubie half-size
+function makeGeo(slot) {
+  if (slot === 0 || slot === 1) return new THREE.BoxGeometry(SD,   SI*2, SI*2);
+  if (slot === 2 || slot === 3) return new THREE.BoxGeometry(SI*2, SD,   SI*2);
+  return                               new THREE.BoxGeometry(SI*2, SI*2, SD  );
+}
 
-  var BLACK = 0x111111;
-  var FACE_HEX = { U:0xffffff, D:0xffdd00, F:0xee2211, B:0xff7700, R:0x1177ee, L:0x22bb44 };
+var SLOT = [
+  { pos: [ H+SD,    0,      0    ], face: 'R' },
+  { pos: [-(H+SD),  0,      0    ], face: 'L' },
+  { pos: [ 0,    H+SD,      0    ], face: 'U' },
+  { pos: [ 0,  -(H+SD),     0    ], face: 'D' },
+  { pos: [ 0,      0,    H+SD    ], face: 'F' },
+  { pos: [ 0,      0,  -(H+SD)   ], face: 'B' },
+];
 
-  // ─── Geometries (shared, read-only is fine on geometry) ────────
-  var GEO_BODY = new THREE.BoxGeometry(SZ, SZ, SZ);
-  // Individual sticker geometries — one per slot so we never share
-  // a geometry between two meshes (that's what caused the read-only error)
-  function makeGeo(slot) {
-    if (slot === 0 || slot === 1) return new THREE.BoxGeometry(SD,    SI*2, SI*2);
-    if (slot === 2 || slot === 3) return new THREE.BoxGeometry(SI*2,  SD,   SI*2);
-    return                               new THREE.BoxGeometry(SI*2,  SI*2, SD  );
-  }
-  // Sticker local positions & which face colour they get
-  var SLOT = [
-    { pos: [ H+SD, 0,     0     ], face: 'R' },  // 0 +X
-    { pos: [-(H+SD), 0,   0     ], face: 'L' },  // 1 -X
-    { pos: [ 0,  H+SD,    0     ], face: 'U' },  // 2 +Y
-    { pos: [ 0, -(H+SD),  0     ], face: 'D' },  // 3 -Y
-    { pos: [ 0,  0,    H+SD     ], face: 'F' },  // 4 +Z
-    { pos: [ 0,  0,  -(H+SD)    ], face: 'B' },  // 5 -Z
-  ];
+function createCubie(gx, gy, gz) {
+  var group = new THREE.Group();
+  group.position.set(gx * STEP, gy * STEP, gz * STEP);
 
-  // ─── Cubie factory ────────────────────────────────────────────
-  // Colours live on the material of each sticker mesh.
-  // They travel physically with the cubie through every rotation —
-  // no separate state array that can ever get out of sync.
-  function createCubie(gx, gy, gz) {
-    var group = new THREE.Group();
-    group.position.set(gx * STEP, gy * STEP, gz * STEP);
+  group.add(new THREE.Mesh(
+    new THREE.BoxGeometry(SZ, SZ, SZ),
+    new THREE.MeshLambertMaterial({ color: BLACK })
+  ));
 
-    // Black body — fresh geometry per cubie to avoid the read-only trap
-    group.add(new THREE.Mesh(
-      new THREE.BoxGeometry(SZ, SZ, SZ),
-      new THREE.MeshLambertMaterial({ color: BLACK })
-    ));
+  var exposed = new Set();
+  if (gx ===  1) exposed.add(0);
+  if (gx === -1) exposed.add(1);
+  if (gy ===  1) exposed.add(2);
+  if (gy === -1) exposed.add(3);
+  if (gz ===  1) exposed.add(4);
+  if (gz === -1) exposed.add(5);
 
-    // Which slots are on an outer face?
-    var exposed = new Set();
-    if (gx ===  1) exposed.add(0);
-    if (gx === -1) exposed.add(1);
-    if (gy ===  1) exposed.add(2);
-    if (gy === -1) exposed.add(3);
-    if (gz ===  1) exposed.add(4);
-    if (gz === -1) exposed.add(5);
-
-    for (var i = 0; i < 6; i++) {
-      var color = exposed.has(i) ? FACE_HEX[SLOT[i].face] : BLACK;
-      var mesh  = new THREE.Mesh(
-        makeGeo(i),   // fresh geometry — never shared
-        new THREE.MeshLambertMaterial({ color: color })
-      );
-      mesh.position.set(SLOT[i].pos[0], SLOT[i].pos[1], SLOT[i].pos[2]);
-      group.add(mesh);
-    }
-
-    return { group: group, gx: gx, gy: gy, gz: gz };
-  }
-
-  // ─── Build / Reset ────────────────────────────────────────────
-  function buildCube() {
-    for (var i = 0; i < cubies.length; i++) scene.remove(cubies[i].group);
-    cubies = [];
-    for (var gx = -1; gx <= 1; gx++)
-      for (var gy = -1; gy <= 1; gy++)
-        for (var gz = -1; gz <= 1; gz++) {
-          var c = createCubie(gx, gy, gz);
-          scene.add(c.group);
-          cubies.push(c);
-        }
-  }
-
-  // ─── Move system ──────────────────────────────────────────────
-  var LAYER_FILTER = {
-    R: function(c){ return c.gx ===  1; },
-    L: function(c){ return c.gx === -1; },
-    U: function(c){ return c.gy ===  1; },
-    D: function(c){ return c.gy === -1; },
-    F: function(c){ return c.gz ===  1; },
-    B: function(c){ return c.gz === -1; },
-  };
-  var MOVE_AXIS = {
-    R:  new THREE.Vector3( 1, 0, 0), Ri: new THREE.Vector3(-1, 0, 0),
-    L:  new THREE.Vector3(-1, 0, 0), Li: new THREE.Vector3( 1, 0, 0),
-    U:  new THREE.Vector3( 0, 1, 0), Ui: new THREE.Vector3( 0,-1, 0),
-    D:  new THREE.Vector3( 0,-1, 0), Di: new THREE.Vector3( 0, 1, 0),
-    F:  new THREE.Vector3( 0, 0, 1), Fi: new THREE.Vector3( 0, 0,-1),
-    B:  new THREE.Vector3( 0, 0,-1), Bi: new THREE.Vector3( 0, 0, 1),
-  };
-  var MOVE_BASE = {
-    R:'R',Ri:'R', L:'L',Li:'L', U:'U',Ui:'U',
-    D:'D',Di:'D', F:'F',Fi:'F', B:'B',Bi:'B',
-  };
-
-  var ANIM_MS = 130;
-
-  function ease(t) { return t * t * (3 - 2 * t); }
-
-  // Snap to nearest 90° to kill float drift
-  var SNAPS = [0, 0.5, Math.SQRT1_2, Math.sqrt(0.75), 1];
-  function snapComp(v) {
-    var best = 0, bd = Infinity;
-    for (var si = 0; si < SNAPS.length; si++) {
-      for (var sg = -1; sg <= 1; sg += 2) {
-        var d = Math.abs(v - sg * SNAPS[si]);
-        if (d < bd) { bd = d; best = sg * SNAPS[si]; }
-      }
-    }
-    return best;
-  }
-  function snapQuat(obj) {
-    var q = obj.quaternion;
-    q.set(snapComp(q.x), snapComp(q.y), snapComp(q.z), snapComp(q.w));
-    q.normalize();
-  }
-
-  function processQueue() {
-    if (!animQueue.length) { animating = false; return; }
-    animating = true;
-    var mv       = animQueue.shift();
-    var base     = MOVE_BASE[mv];
-    var axis     = MOVE_AXIS[mv];
-    var affected = cubies.filter(LAYER_FILTER[base]);
-
-    var pivot = new THREE.Group();
-    scene.add(pivot);
-    for (var i = 0; i < affected.length; i++) pivot.attach(affected[i].group);
-
-    var t0 = performance.now();
-    var prevAngle = 0;
-
-    function frame(now) {
-      var t     = Math.min(1, (now - t0) / ANIM_MS);
-      var angle = ease(t) * (Math.PI / 2);
-      pivot.rotateOnAxis(axis, angle - prevAngle);
-      prevAngle = angle;
-
-      if (t < 1) { requestAnimationFrame(frame); return; }
-
-      // Detach each cubie back to the scene
-      for (var i = 0; i < affected.length; i++) {
-        var c = affected[i];
-        scene.attach(c.group);
-
-        // Snap position — use setX/Y/Z to avoid any read-only issue
-        var nx = Math.round(c.group.position.x / STEP) * STEP;
-        var ny = Math.round(c.group.position.y / STEP) * STEP;
-        var nz = Math.round(c.group.position.z / STEP) * STEP;
-        c.group.position.set(nx, ny, nz);
-
-        c.gx = Math.round(nx / STEP);
-        c.gy = Math.round(ny / STEP);
-        c.gz = Math.round(nz / STEP);
-
-        snapQuat(c.group);
-      }
-
-      scene.remove(pivot);
-      moveCount++;
-      document.getElementById('moves').textContent = moveCount;
-      setTimeout(processQueue, 0);
-    }
-
-    requestAnimationFrame(frame);
-  }
-
-  function doMove(mv) {
-    animQueue.push(mv);
-    if (!animating) processQueue();
-  }
-
-  function scramble() {
-    var mvs = ['R','Ri','L','Li','U','Ui','D','Di','F','Fi','B','Bi'];
-    var last = '';
-    for (var i = 0; i < 20; i++) {
-      var m;
-      do { m = mvs[Math.floor(Math.random() * mvs.length)]; } while (m === last);
-      last = m;
-      animQueue.push(m);
-    }
-    moveCount = 0;
-    document.getElementById('moves').textContent = 0;
-    document.getElementById('status').textContent = 'Zamícháno — vyřeš kostku! 🧩';
-    if (!animating) processQueue();
-  }
-
-  function resetCube() {
-    animQueue = [];
-    animating = false;
-    moveCount = 0;
-    document.getElementById('moves').textContent = 0;
-    document.getElementById('status').textContent = 'Resetováno ✓';
-    buildCube();
-    setTimeout(function () {
-      document.getElementById('status').textContent =
-        'Táhni myší pro otočení · tlačítka pro tahy';
-    }, 1500);
-  }
-
-  // ─── Orbit camera ─────────────────────────────────────────────
-  var CAM_R = 9.8;
-
-  renderer.domElement.addEventListener('mousedown', function (e) {
-    dragging = true; px = e.clientX; py = e.clientY;
-  });
-  window.addEventListener('mouseup', function () { dragging = false; });
-  window.addEventListener('mousemove', function (e) {
-    if (!dragging) return;
-    rotY += (e.clientX - px) * 0.006;
-    rotX += (e.clientY - py) * 0.006;
-    rotX = Math.max(-1.4, Math.min(1.4, rotX));
-    px = e.clientX; py = e.clientY;
-  });
-  renderer.domElement.addEventListener('touchstart', function (e) {
-    dragging = true; px = e.touches[0].clientX; py = e.touches[0].clientY;
-    e.preventDefault();
-  }, { passive: false });
-  window.addEventListener('touchend', function () { dragging = false; });
-  window.addEventListener('touchmove', function (e) {
-    if (!dragging) return;
-    rotY += (e.touches[0].clientX - px) * 0.006;
-    rotX += (e.touches[0].clientY - py) * 0.006;
-    rotX = Math.max(-1.4, Math.min(1.4, rotX));
-    px = e.touches[0].clientX; py = e.touches[0].clientY;
-    e.preventDefault();
-  }, { passive: false });
-
-  // ─── Render loop ──────────────────────────────────────────────
-  function animate() {
-    requestAnimationFrame(animate);
-    camera.position.set(
-      CAM_R * Math.sin(rotY) * Math.cos(rotX),
-      CAM_R * Math.sin(rotX),
-      CAM_R * Math.cos(rotY) * Math.cos(rotX)
+  for (var i = 0; i < 6; i++) {
+    var color = exposed.has(i) ? FACE_HEX[SLOT[i].face] : BLACK;
+    var mesh  = new THREE.Mesh(
+      makeGeo(i),
+      new THREE.MeshLambertMaterial({ color: color })
     );
-    camera.lookAt(0, 0, 0);
-    renderer.render(scene, camera);
+    mesh.position.set(SLOT[i].pos[0], SLOT[i].pos[1], SLOT[i].pos[2]);
+    group.add(mesh);
   }
 
-  // ─── Start ────────────────────────────────────────────────────
+  return { group: group, gx: gx, gy: gy, gz: gz };
+}
+
+function buildCube() {
+  for (var i = 0; i < cubies.length; i++) scene.remove(cubies[i].group);
+  cubies = [];
+  for (var gx = -1; gx <= 1; gx++)
+    for (var gy = -1; gy <= 1; gy++)
+      for (var gz = -1; gz <= 1; gz++) {
+        var c = createCubie(gx, gy, gz);
+        scene.add(c.group);
+        cubies.push(c);
+      }
+}
+
+var LAYER_FILTER = {
+  R: function(c){ return c.gx ===  1; },
+  L: function(c){ return c.gx === -1; },
+  U: function(c){ return c.gy ===  1; },
+  D: function(c){ return c.gy === -1; },
+  F: function(c){ return c.gz ===  1; },
+  B: function(c){ return c.gz === -1; },
+};
+
+var MOVE_AXIS = {
+  R:  new THREE.Vector3( 1, 0, 0), Ri: new THREE.Vector3(-1, 0, 0),
+  L:  new THREE.Vector3(-1, 0, 0), Li: new THREE.Vector3( 1, 0, 0),
+  U:  new THREE.Vector3( 0, 1, 0), Ui: new THREE.Vector3( 0,-1, 0),
+  D:  new THREE.Vector3( 0,-1, 0), Di: new THREE.Vector3( 0, 1, 0),
+  F:  new THREE.Vector3( 0, 0, 1), Fi: new THREE.Vector3( 0, 0,-1),
+  B:  new THREE.Vector3( 0, 0,-1), Bi: new THREE.Vector3( 0, 0, 1),
+};
+
+var MOVE_BASE = {
+  R:'R',Ri:'R', L:'L',Li:'L', U:'U',Ui:'U',
+  D:'D',Di:'D', F:'F',Fi:'F', B:'B',Bi:'B',
+};
+
+var ANIM_MS = 130;
+
+function ease(t) { return t * t * (3 - 2 * t); }
+
+var SNAPS = [0, 0.5, Math.SQRT1_2, Math.sqrt(0.75), 1];
+
+function snapComp(v) {
+  var best = 0, bd = Infinity;
+  for (var si = 0; si < SNAPS.length; si++) {
+    for (var sg = -1; sg <= 1; sg += 2) {
+      var d = Math.abs(v - sg * SNAPS[si]);
+      if (d < bd) { bd = d; best = sg * SNAPS[si]; }
+    }
+  }
+  return best;
+}
+
+function snapQuat(obj) {
+  var q = obj.quaternion;
+  q.set(snapComp(q.x), snapComp(q.y), snapComp(q.z), snapComp(q.w));
+  q.normalize();
+}
+
+function processQueue() {
+  if (!animQueue.length) { animating = false; return; }
+  animating = true;
+  var mv       = animQueue.shift();
+  var base     = MOVE_BASE[mv];
+  var axis     = MOVE_AXIS[mv];
+  var affected = cubies.filter(LAYER_FILTER[base]);
+
+  var pivot = new THREE.Group();
+  scene.add(pivot);
+  for (var i = 0; i < affected.length; i++) pivot.attach(affected[i].group);
+
+  var t0 = performance.now();
+  var prevAngle = 0;
+
+  function frame(now) {
+    var t     = Math.min(1, (now - t0) / ANIM_MS);
+    var angle = ease(t) * (Math.PI / 2);
+    pivot.rotateOnAxis(axis, angle - prevAngle);
+    prevAngle = angle;
+
+    if (t < 1) { requestAnimationFrame(frame); return; }
+
+    for (var i = 0; i < affected.length; i++) {
+      var c = affected[i];
+      scene.attach(c.group);
+      var nx = Math.round(c.group.position.x / STEP) * STEP;
+      var ny = Math.round(c.group.position.y / STEP) * STEP;
+      var nz = Math.round(c.group.position.z / STEP) * STEP;
+      c.group.position.set(nx, ny, nz);
+      c.gx = Math.round(nx / STEP);
+      c.gy = Math.round(ny / STEP);
+      c.gz = Math.round(nz / STEP);
+      snapQuat(c.group);
+    }
+
+    scene.remove(pivot);
+    moveCount++;
+    document.getElementById('moves').textContent = moveCount;
+    setTimeout(processQueue, 0);
+  }
+
+  requestAnimationFrame(frame);
+}
+
+function doMove(mv) {
+  animQueue.push(mv);
+  if (!animating) processQueue();
+}
+
+function scramble() {
+  var mvs = ['R','Ri','L','Li','U','Ui','D','Di','F','Fi','B','Bi'];
+  var last = '';
+  for (var i = 0; i < 20; i++) {
+    var m;
+    do { m = mvs[Math.floor(Math.random() * mvs.length)]; } while (m === last);
+    last = m;
+    animQueue.push(m);
+  }
+  moveCount = 0;
+  document.getElementById('moves').textContent = 0;
+  document.getElementById('status').textContent = 'Zamícháno — vyřeš kostku! 🧩';
+  if (!animating) processQueue();
+}
+
+function resetCube() {
+  animQueue = [];
+  animating = false;
+  moveCount = 0;
+  document.getElementById('moves').textContent = 0;
+  document.getElementById('status').textContent = 'Resetováno ✓';
   buildCube();
-  animate();
+  setTimeout(function () {
+    document.getElementById('status').textContent = 'Táhni myší pro otočení · tlačítka pro tahy';
+  }, 1500);
+}
+
+var CAM_R = 13.0;
+
+renderer.domElement.addEventListener('mousedown', function (e) {
+  dragging = true; px = e.clientX; py = e.clientY;
+});
+window.addEventListener('mouseup', function () { dragging = false; });
+window.addEventListener('mousemove', function (e) {
+  if (!dragging) return;
+  rotY -= (e.clientX - px) * 0.006;
+  rotX -= (e.clientY - py) * 0.006;
+  rotX = Math.max(-1.4, Math.min(1.4, rotX));
+  px = e.clientX; py = e.clientY;
+});
+renderer.domElement.addEventListener('touchstart', function (e) {
+  dragging = true; px = e.touches[0].clientX; py = e.touches[0].clientY;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchend', function () { dragging = false; });
+window.addEventListener('touchmove', function (e) {
+  if (!dragging) return;
+  rotY -= (e.touches[0].clientX - px) * 0.006;
+  rotX -= (e.touches[0].clientY - py) * 0.006;
+  rotX = Math.max(-1.4, Math.min(1.4, rotX));
+  px = e.touches[0].clientX; py = e.touches[0].clientY;
+  e.preventDefault();
+}, { passive: false });
+
+function animate() {
+  requestAnimationFrame(animate);
+  camera.position.set(
+    CAM_R * Math.sin(rotY) * Math.cos(rotX),
+    CAM_R * Math.sin(rotX),
+    CAM_R * Math.cos(rotY) * Math.cos(rotX)
+  );
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+}
+
+buildCube();
+animate();
 </script>
 </body>
 </html>
