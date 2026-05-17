@@ -6,185 +6,169 @@
 <title>Rubikova kostka 3×3</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; user-select:none; }
-#info {
-  position:absolute; top:12px; left:50%; transform:translateX(-50%);
-  color:#fff; background:rgba(0,0,0,0.65); padding:8px 20px;
-  border-radius:20px; font-size:14px; text-align:center; z-index:10;
-  white-space:nowrap;
-}
-#moves { color:#ffdd88; font-weight:bold; }
-#status { color:#88ffdd; }
+body { background:#1a1a2e; font-family:Arial,sans-serif; overflow:hidden; user-select:none; -webkit-user-select:none; }
 #controls {
   position:absolute; top:16px; left:50%; transform:translateX(-50%);
   display:flex; gap:10px; z-index:10; align-items:center;
+  background:rgba(0,0,0,0.55); padding:8px 16px; border-radius:14px;
 }
-.axis { color:#fff; font-size:13px; font-weight:bold; display:flex; gap:4px; align-items:center; }
-.axis span { padding:5px 10px; border-radius:7px; cursor:pointer; font-family:monospace; font-size:13px; transition:background .12s, transform .08s; }
-.axis span:hover { transform:scale(1.08); }
-.xax span { background:#7a1a1a; color:#ff8888; }
-.xax span:hover { background:#aa2222; }
-.yax span { background:#1a5c1a; color:#88ff88; }
-.yax span:hover { background:#228822; }
-.zax span { background:#1a1a7a; color:#8888ff; }
-.zax span:hover { background:#2222aa; }
-#counter { color:#fff; font-size:14px; background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:8px; }
+#counter { color:#ffdd88; font-size:14px; font-weight:bold; min-width:70px; }
+#timer   { color:#88ffdd; font-size:14px; font-weight:bold; min-width:60px; }
 button {
-  padding:7px 13px; font-size:13px; font-weight:bold;
+  padding:7px 16px; font-size:13px; font-weight:bold;
   border:none; border-radius:8px; cursor:pointer;
-  background:#2d2d5e; color:#fff; transition:background .12s, transform .08s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-button:hover { background:#4444aa; transform:scale(1.06); }
-button:active { transform:scale(0.96); }
-.inv { background:#3a2d5e; color:#d0b0ff; }
-.inv:hover { background:#6644aa; }
-.go { background:#1a5c3a; color:#7fffb0; }
-.go:hover { background:#2a8c5a; }
+.go  { background:#1a5c3a; color:#7fffb0; }
 .rst { background:#5c1a1a; color:#ffaaaa; }
-.rst:hover { background:#8c2a2a; }
 </style>
 </head>
 <body>
 
 <div id="controls">
-  <span id="counter">Tahy: <b>0</b></span>
-  <button class="go" onclick="scramble()">Zamíchat</button>
-  <button class="rst" onclick="resetCube()">Reset</button>
+  <span id="counter">Tahy: 0</span>
+  <span id="timer">00:00</span>
+  <button class="go"  id="btn-scramble">Zamíchat</button>
+  <button class="rst" id="btn-reset">Reset</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+// ── State ────────────────────────────────────────────────────
 var cubies    = [];
 var animQueue = [];
 var animating = false;
 var moveCount = 0;
-var rotX = 0.42;
-var rotY = 0.55;
+var rotX = 0.42, rotY = 0.55;
+var dragState = null;
+var timerInterval = null;
+var timerStart    = null;
+var timerRunning  = false;
 
-var scene = new THREE.Scene();
+// ── Scene ────────────────────────────────────────────────────
+var scene    = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
-var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
-var renderer = new THREE.WebGLRenderer({ antialias: true });
+var camera   = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 100);
+var renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 var dl = new THREE.DirectionalLight(0xffffff, 0.75);
-dl.position.set(6, 10, 8); scene.add(dl);
+dl.position.set(6,10,8); scene.add(dl);
 var dl2 = new THREE.DirectionalLight(0x8899ff, 0.25);
-dl2.position.set(-5, -4, -6); scene.add(dl2);
+dl2.position.set(-5,-4,-6); scene.add(dl2);
 
-window.addEventListener('resize', function () {
-  camera.aspect = innerWidth / innerHeight;
+window.addEventListener('resize', function(){
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
-var SZ = 1.0, GAP = 0.055, STEP = SZ + GAP, SI = 0.42, SD = 0.028, H = SZ / 2;
-var BLACK = 0x111111;
+// ── Cube geometry ────────────────────────────────────────────
+var SZ=1.0, GAP=0.055, STEP=SZ+GAP, SI=0.42, SD=0.028, H=SZ/2;
+var BLACK    = 0x111111;
 var FACE_HEX = { U:0xffdd00, D:0xffffff, F:0xff7700, B:0xee2211, R:0x1177ee, L:0x22bb44 };
 
 function makeGeo(slot) {
-  if (slot === 0 || slot === 1) return new THREE.BoxGeometry(SD,   SI*2, SI*2);
-  if (slot === 2 || slot === 3) return new THREE.BoxGeometry(SI*2, SD,   SI*2);
-  return                               new THREE.BoxGeometry(SI*2, SI*2, SD  );
+  if (slot===0||slot===1) return new THREE.BoxGeometry(SD,   SI*2, SI*2);
+  if (slot===2||slot===3) return new THREE.BoxGeometry(SI*2, SD,   SI*2);
+  return                         new THREE.BoxGeometry(SI*2, SI*2, SD  );
 }
-
 var SLOT = [
-  { pos: [ H+SD,   0,      0    ], face:'R' },
-  { pos: [-(H+SD), 0,      0    ], face:'L' },
-  { pos: [ 0,    H+SD,     0    ], face:'U' },
-  { pos: [ 0,  -(H+SD),    0    ], face:'D' },
-  { pos: [ 0,    0,     H+SD    ], face:'F' },
-  { pos: [ 0,    0,   -(H+SD)   ], face:'B' },
+  { pos:[ H+SD,    0,      0   ], face:'R' },
+  { pos:[-(H+SD),  0,      0   ], face:'L' },
+  { pos:[ 0,    H+SD,      0   ], face:'U' },
+  { pos:[ 0,  -(H+SD),     0   ], face:'D' },
+  { pos:[ 0,    0,     H+SD    ], face:'F' },
+  { pos:[ 0,    0,   -(H+SD)   ], face:'B' },
 ];
 
-function createCubie(gx, gy, gz) {
-  var group = new THREE.Group();
-  group.position.set(gx * STEP, gy * STEP, gz * STEP);
-  group.add(new THREE.Mesh(new THREE.BoxGeometry(SZ,SZ,SZ), new THREE.MeshLambertMaterial({ color:BLACK })));
-  var exposed = new Set();
-  if (gx===1) exposed.add(0); if (gx===-1) exposed.add(1);
-  if (gy===1) exposed.add(2); if (gy===-1) exposed.add(3);
-  if (gz===1) exposed.add(4); if (gz===-1) exposed.add(5);
-  for (var i = 0; i < 6; i++) {
-    var mesh = new THREE.Mesh(makeGeo(i), new THREE.MeshLambertMaterial({ color: exposed.has(i) ? FACE_HEX[SLOT[i].face] : BLACK }));
-    mesh.position.set(SLOT[i].pos[0], SLOT[i].pos[1], SLOT[i].pos[2]);
-    group.add(mesh);
+function createCubie(gx,gy,gz) {
+  var g = new THREE.Group();
+  g.position.set(gx*STEP, gy*STEP, gz*STEP);
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(SZ,SZ,SZ), new THREE.MeshLambertMaterial({color:BLACK})));
+  var exp = new Set();
+  if (gx=== 1) exp.add(0); if (gx===-1) exp.add(1);
+  if (gy=== 1) exp.add(2); if (gy===-1) exp.add(3);
+  if (gz=== 1) exp.add(4); if (gz===-1) exp.add(5);
+  for (var i=0;i<6;i++) {
+    var m = new THREE.Mesh(makeGeo(i), new THREE.MeshLambertMaterial({color: exp.has(i)?FACE_HEX[SLOT[i].face]:BLACK}));
+    m.position.set(SLOT[i].pos[0], SLOT[i].pos[1], SLOT[i].pos[2]);
+    g.add(m);
   }
-  return { group:group, gx:gx, gy:gy, gz:gz };
+  return {group:g, gx:gx, gy:gy, gz:gz};
 }
 
 function buildCube() {
-  for (var i = 0; i < cubies.length; i++) scene.remove(cubies[i].group);
-  cubies = [];
-  for (var gx=-1; gx<=1; gx++)
-    for (var gy=-1; gy<=1; gy++)
-      for (var gz=-1; gz<=1; gz++) {
-        var c = createCubie(gx,gy,gz);
-        scene.add(c.group);
-        cubies.push(c);
+  for (var i=0;i<cubies.length;i++) scene.remove(cubies[i].group);
+  cubies=[];
+  for (var gx=-1;gx<=1;gx++)
+    for (var gy=-1;gy<=1;gy++)
+      for (var gz=-1;gz<=1;gz++) {
+        var c=createCubie(gx,gy,gz);
+        scene.add(c.group); cubies.push(c);
       }
 }
 
-var LAYER_FILTER = {
-  R:function(c){return c.gx===1;},  L:function(c){return c.gx===-1;},
-  U:function(c){return c.gy===1;},  D:function(c){return c.gy===-1;},
-  F:function(c){return c.gz===1;},  B:function(c){return c.gz===-1;},
+// ── Move system ──────────────────────────────────────────────
+var LAYER = {
+  R:function(c){return c.gx=== 1;}, L:function(c){return c.gx===-1;},
+  U:function(c){return c.gy=== 1;}, D:function(c){return c.gy===-1;},
+  F:function(c){return c.gz=== 1;}, B:function(c){return c.gz===-1;},
 };
-var MOVE_AXIS = {
-  R: new THREE.Vector3(1,0,0),  Ri: new THREE.Vector3(-1,0,0),
-  L: new THREE.Vector3(-1,0,0), Li: new THREE.Vector3(1,0,0),
-  U: new THREE.Vector3(0,1,0),  Ui: new THREE.Vector3(0,-1,0),
-  D: new THREE.Vector3(0,-1,0), Di: new THREE.Vector3(0,1,0),
-  F: new THREE.Vector3(0,0,1),  Fi: new THREE.Vector3(0,0,-1),
-  B: new THREE.Vector3(0,0,-1), Bi: new THREE.Vector3(0,0,1),
+var MAXIS = {
+  R: new THREE.Vector3( 1,0,0), Ri: new THREE.Vector3(-1,0,0),
+  L: new THREE.Vector3(-1,0,0), Li: new THREE.Vector3( 1,0,0),
+  U: new THREE.Vector3(0, 1,0), Ui: new THREE.Vector3(0,-1,0),
+  D: new THREE.Vector3(0,-1,0), Di: new THREE.Vector3(0, 1,0),
+  F: new THREE.Vector3(0,0, 1), Fi: new THREE.Vector3(0,0,-1),
+  B: new THREE.Vector3(0,0,-1), Bi: new THREE.Vector3(0,0, 1),
 };
-var MOVE_BASE = { R:'R',Ri:'R',L:'L',Li:'L',U:'U',Ui:'U',D:'D',Di:'D',F:'F',Fi:'F',B:'B',Bi:'B' };
-var ANIM_MS = 130;
-
-function ease(t) { return t*t*(3-2*t); }
-
+var MBASE = {R:'R',Ri:'R',L:'L',Li:'L',U:'U',Ui:'U',D:'D',Di:'D',F:'F',Fi:'F',B:'B',Bi:'B'};
 var SNAPS = [0, 0.5, Math.SQRT1_2, Math.sqrt(0.75), 1];
-function snapComp(v) {
+
+function snapC(v) {
   var best=0, bd=Infinity;
-  for (var si=0; si<SNAPS.length; si++)
-    for (var sg=-1; sg<=1; sg+=2) { var d=Math.abs(v-sg*SNAPS[si]); if(d<bd){bd=d;best=sg*SNAPS[si];} }
+  for (var i=0;i<SNAPS.length;i++)
+    for (var s=-1;s<=1;s+=2) { var d=Math.abs(v-s*SNAPS[i]); if(d<bd){bd=d;best=s*SNAPS[i];} }
   return best;
 }
-function snapQuat(obj) {
+function snapQ(obj) {
   var q=obj.quaternion;
-  q.set(snapComp(q.x),snapComp(q.y),snapComp(q.z),snapComp(q.w));
-  q.normalize();
+  q.set(snapC(q.x),snapC(q.y),snapC(q.z),snapC(q.w)); q.normalize();
 }
+function ease(t){ return t*t*(3-2*t); }
 
 function processQueue() {
   if (!animQueue.length) { animating=false; return; }
   animating=true;
-  var mv=animQueue.shift(), base=MOVE_BASE[mv], axis=MOVE_AXIS[mv];
-  var affected=cubies.filter(LAYER_FILTER[base]);
+  var mv=animQueue.shift(), base=MBASE[mv], axis=MAXIS[mv];
+  var aff=cubies.filter(LAYER[base]);
   var pivot=new THREE.Group(); scene.add(pivot);
-  for (var i=0;i<affected.length;i++) pivot.attach(affected[i].group);
-  var t0=performance.now(), prevAngle=0;
+  for (var i=0;i<aff.length;i++) pivot.attach(aff[i].group);
+  var t0=performance.now(), prev=0;
   function frame(now) {
-    var t=Math.min(1,(now-t0)/ANIM_MS);
-    var angle=ease(t)*(Math.PI/2);
-    pivot.rotateOnAxis(axis, angle-prevAngle);
-    prevAngle=angle;
+    var t=Math.min(1,(now-t0)/130);
+    var a=ease(t)*(Math.PI/2);
+    pivot.rotateOnAxis(axis, a-prev); prev=a;
     if (t<1) { requestAnimationFrame(frame); return; }
-    for (var i=0;i<affected.length;i++) {
-      var c=affected[i]; scene.attach(c.group);
+    for (var i=0;i<aff.length;i++) {
+      var c=aff[i]; scene.attach(c.group);
       var nx=Math.round(c.group.position.x/STEP)*STEP;
       var ny=Math.round(c.group.position.y/STEP)*STEP;
       var nz=Math.round(c.group.position.z/STEP)*STEP;
       c.group.position.set(nx,ny,nz);
       c.gx=Math.round(nx/STEP); c.gy=Math.round(ny/STEP); c.gz=Math.round(nz/STEP);
-      snapQuat(c.group);
+      snapQ(c.group);
     }
     scene.remove(pivot);
     moveCount++;
-    document.getElementById('counter').innerHTML = 'Tahy: <b>' + moveCount + '</b>';
+    document.getElementById('counter').textContent = 'Tahy: '+moveCount;
+    // Start timer on first real move (not scramble)
+    if (!timerRunning && moveCount===1) startTimer();
     setTimeout(processQueue,0);
   }
   requestAnimationFrame(frame);
@@ -192,291 +176,179 @@ function processQueue() {
 
 function doMove(mv) { animQueue.push(mv); if(!animating) processQueue(); }
 
+// ── Timer ────────────────────────────────────────────────────
+function startTimer() {
+  timerRunning = true;
+  timerStart   = Date.now();
+  clearInterval(timerInterval);
+  timerInterval = setInterval(function(){
+    var el = Date.now() - timerStart;
+    var s  = Math.floor(el/1000) % 60;
+    var m  = Math.floor(el/60000);
+    document.getElementById('timer').textContent =
+      (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+  }, 500);
+}
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+}
+function resetTimer() {
+  stopTimer();
+  document.getElementById('timer').textContent = '00:00';
+}
+
+// ── Scramble / Reset ─────────────────────────────────────────
 function scramble() {
   var mvs=['R','Ri','L','Li','U','Ui','D','Di','F','Fi','B','Bi'], last='';
+  animQueue=[]; animating=false;
   for (var i=0;i<20;i++) {
     var m; do { m=mvs[Math.floor(Math.random()*mvs.length)]; } while(m===last);
     last=m; animQueue.push(m);
   }
   moveCount=0;
-  if(!animating) processQueue();
+  document.getElementById('counter').textContent='Tahy: 0';
+  resetTimer();
+  processQueue();
 }
 
 function resetCube() {
   animQueue=[]; animating=false; moveCount=0;
-  document.getElementById('counter').innerHTML = 'Tahy: <b>0</b>';
+  document.getElementById('counter').textContent='Tahy: 0';
+  resetTimer();
   buildCube();
 }
 
-// ─── DRAG TO TURN ─────────────────────────────────────────────
-// Raycaster pro detekci kliknutého dílku
+// Buttons — použij click i touchend aby fungovaly na mobilu
+document.getElementById('btn-scramble').addEventListener('click', scramble);
+document.getElementById('btn-reset').addEventListener('click', resetCube);
+
+// ── Drag-to-turn + orbit ─────────────────────────────────────
 var raycaster = new THREE.Raycaster();
-var mouse2d   = new THREE.Vector2();
-
-// Stav dragu
-var dragState = null;
-// dragState = {
-//   mode: 'orbit' | 'turn',
-//   startX, startY,
-//   hitCubie, hitFaceNormal (world), hitFaceIndex,
-//   moved: bool
-// }
-
 var CAM_R = 13.0;
+var DRAG_THR = 10;
 
-function getMouseNDC(clientX, clientY) {
-  return new THREE.Vector2(
-    (clientX / innerWidth)  *  2 - 1,
-    (clientY / innerHeight) * -2 + 1
-  );
-}
-
-// Najde cubie a normálu zasažené plochy pod kurzorem
-function raycastCube(clientX, clientY) {
-  var ndc = getMouseNDC(clientX, clientY);
+function raycast(cx,cy) {
+  var ndc = new THREE.Vector2((cx/innerWidth)*2-1, (cy/innerHeight)*-2+1);
   raycaster.setFromCamera(ndc, camera);
-  // Sbírej všechny meshe ze všech cubies
-  var meshes = [];
+  var meshes=[];
   for (var i=0;i<cubies.length;i++) {
-    var g=cubies[i].group;
-    for (var j=0;j<g.children.length;j++) meshes.push(g.children[j]);
+    var ch=cubies[i].group.children;
+    for (var j=0;j<ch.length;j++) meshes.push(ch[j]);
   }
-  var hits = raycaster.intersectObjects(meshes);
+  var hits=raycaster.intersectObjects(meshes);
   if (!hits.length) return null;
-  var hit = hits[0];
-  // Najdi který cubie patří zasaženému objektu
-  var hitCubie = null;
+  var hit=hits[0];
+  var hc=null;
   for (var i=0;i<cubies.length;i++) {
-    if (cubies[i].group.children.indexOf(hit.object) !== -1) { hitCubie=cubies[i]; break; }
+    if (cubies[i].group.children.indexOf(hit.object)!==-1) { hc=cubies[i]; break; }
   }
-  if (!hitCubie) return null;
-  // Normála v world space
-  var normal = hit.face.normal.clone();
-  normal.transformDirection(hit.object.matrixWorld);
-  return { cubie: hitCubie, normal: normal, point: hit.point };
+  if (!hc) return null;
+  var norm=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  return {cubie:hc, normal:norm};
 }
 
-// Ze směru tahu myší a normály zasažené plochy urči tah kostky
-function inferMove(hitNormal, dragDx, dragDy) {
-  // Normála zaokrouhlená na osu
+function inferMove(hitNormal, dx, dy, hitCubie) {
   var nx=Math.round(hitNormal.x), ny=Math.round(hitNormal.y), nz=Math.round(hitNormal.z);
-
-  // Směr tahu v camera space → world space (jen horizontální rovinu)
-  // Kamera orbita: rotX, rotY
-  // Pohyb myší dx = doprava na obrazovce, dy = dolů
-  // Spočítám "right" a "up" vektory kamery v world space
-  var sinY=Math.sin(rotY), cosY=Math.cos(rotY);
-  var sinX=Math.sin(rotX), cosX=Math.cos(rotX);
-
-  // Camera right vector (perpendicular to view, horizontal)
-  var camRight = new THREE.Vector3(cosY, 0, -sinY).normalize();
-  // Camera up vector
-  var camUp    = new THREE.Vector3(sinY*sinX, cosX, cosY*sinX).normalize();
-
-  // Drag vector in world space (invertujeme dy protože screen y je dolů)
-  var dragWorld = new THREE.Vector3()
-    .addScaledVector(camRight,  dragDx)
-    .addScaledVector(camUp,    -dragDy);
-
-  // Osa rotace = křížový součin normály plochy a drag vektoru
-  var faceNorm = new THREE.Vector3(nx, ny, nz);
-  var rotAxis  = new THREE.Vector3().crossVectors(faceNorm, dragWorld).normalize();
-
-  // Zaokrouhlíme rotAxis na nejbližší světovou osu
-  var ax=Math.abs(rotAxis.x), ay=Math.abs(rotAxis.y), az=Math.abs(rotAxis.z);
-  var move='';
-
-  if (ax>=ay && ax>=az) {
-    // Osa X → L nebo R
-    if (nx===1 || nx===-1) {
-      // kliknuto na R nebo L stěnu, osa je X → nemůžeme rotovat R/L po X, vezmi Y nebo Z
-      // fallback: porovnej dy vs dx
-      if (Math.abs(dragDy) > Math.abs(dragDx)) {
-        // Vertical drag on R/L face → F nebo B
-        move = (nz===0) ? (dragDy<0 ? 'U':'D') : (dragDz>0 ? 'F':'B');
-      }
-    }
-    var cubie = dragState.cubie;
-    // Vrstva podle nx/ny/nz
-    if (nx===1)  move=(rotAxis.x>0)?'R':'Ri';
-    else if (nx===-1) move=(rotAxis.x>0)?'Li':'L';
-    else {
-      // rotAxis.x dominuje ale klikli jsme ne na X stěnu → vrstva podle cubie
-      var cx=cubie.gx;
-      if (cx===1) move=(rotAxis.x>0)?'R':'Ri';
-      else if (cx===-1) move=(rotAxis.x>0)?'Li':'L';
-      else move=(rotAxis.x>0)?'Ri':'R'; // střední vrstva, zjednodušení
-    }
-  } else if (ay>=ax && ay>=az) {
-    // Osa Y → U nebo D
-    var cubie=dragState.cubie;
-    var cy=cubie.gy;
-    if (rotAxis.y>0) { move=(cy===1)?'U':(cy===-1)?'Di':'U'; }
-    else             { move=(cy===1)?'Ui':(cy===-1)?'D':'Ui'; }
-  } else {
-    // Osa Z → F nebo B
-    var cubie=dragState.cubie;
-    var cz=cubie.gz;
-    if (rotAxis.z>0) { move=(cz===1)?'F':(cz===-1)?'Bi':'F'; }
-    else             { move=(cz===1)?'Fi':(cz===-1)?'B':'Fi'; }
-  }
-
-  return move;
-}
-
-// Přepracovaná verze — čistší logika
-function inferMove2(hitNormal, dragDx, dragDy, hitCubie) {
-  var nx=Math.round(hitNormal.x), ny=Math.round(hitNormal.y), nz=Math.round(hitNormal.z);
-
-  // Camera vectors
-  var sinY=Math.sin(rotY), cosY=Math.cos(rotY);
-  var sinX=Math.sin(rotX), cosX=Math.cos(rotX);
-  var camRight = new THREE.Vector3( cosY,       0,    -sinY);
-  var camUp    = new THREE.Vector3( sinY*sinX,  cosX,  cosY*sinX);
-
-  // World-space drag direction
-  var drag = new THREE.Vector3()
-    .addScaledVector(camRight,  dragDx)
-    .addScaledVector(camUp,    -dragDy)
-    .normalize();
-
-  // Projektuj drag na rovinu zasažené plochy (odeber normálovou složku)
-  var faceN = new THREE.Vector3(nx, ny, nz);
-  drag.addScaledVector(faceN, -drag.dot(faceN)).normalize();
-
-  // Zaokrouhli na nejbližší světovou osu
-  var best=null, bestDot=0;
+  // Camera basis vectors
+  var sY=Math.sin(rotY), cY=Math.cos(rotY), sX=Math.sin(rotX), cX=Math.cos(rotX);
+  var right = new THREE.Vector3( cY,    0,  -sY);
+  var up    = new THREE.Vector3(sY*sX, cX, cY*sX);
+  // Drag in world space, projected onto face plane
+  var drag = new THREE.Vector3().addScaledVector(right, dx).addScaledVector(up, -dy).normalize();
+  var fN   = new THREE.Vector3(nx,ny,nz);
+  drag.addScaledVector(fN, -drag.dot(fN)).normalize();
+  // Find closest world axis
   var axes=[
-    new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
-    new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
-    new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1),
+    new THREE.Vector3(1,0,0),new THREE.Vector3(-1,0,0),
+    new THREE.Vector3(0,1,0),new THREE.Vector3(0,-1,0),
+    new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,-1),
   ];
-  for (var i=0;i<axes.length;i++) {
-    var d=drag.dot(axes[i]);
-    if (d>bestDot) { bestDot=d; best=axes[i]; }
-  }
+  var best=null, bd=0;
+  for (var i=0;i<axes.length;i++) { var d=drag.dot(axes[i]); if(d>bd){bd=d;best=axes[i];} }
   if (!best) return null;
-
-  // Osa rotace = faceN × drag_axis
-  var rotA = new THREE.Vector3().crossVectors(faceN, best).normalize();
-
-  // Zaokrouhli rotA
-  var rx=Math.round(rotA.x), ry=Math.round(rotA.y), rz=Math.round(rotA.z);
-
-  // Urči vrstvu a směr
+  // Rotation axis = faceNormal × dragAxis
+  var rA=new THREE.Vector3().crossVectors(fN,best).normalize();
+  var rx=Math.round(rA.x), ry=Math.round(rA.y), rz=Math.round(rA.z);
   var cx=hitCubie.gx, cy=hitCubie.gy, cz=hitCubie.gz;
 
+  // Y rotation → U or D layer
   if (ry!==0) {
-    // Rotace kolem Y → vrstva podle cy
-    var layer=(cy===1)?'U':(cy===-1)?'D':'U';
-    if (layer==='U') return ry>0?'U':'Ui';
-    else             return ry>0?'Di':'D';
+    if (cy=== 1) return ry>0?'U':'Ui';
+    if (cy===-1) return ry>0?'Di':'D';
+    // middle layer: pick U or D based on sign
+    return ry>0?'U':'Ui';
   }
+  // X rotation → R or L layer
   if (rx!==0) {
-    var layer=(cx===1)?'R':(cx===-1)?'L':'R';
-    if (layer==='R') return rx>0?'R':'Ri';
-    else             return rx>0?'Li':'L';
+    if (cx=== 1) return rx>0?'R':'Ri';
+    if (cx===-1) return rx>0?'Li':'L';
+    return rx>0?'R':'Ri';
   }
+  // Z rotation → F or B layer
   if (rz!==0) {
-    var layer=(cz===1)?'F':(cz===-1)?'B':'F';
-    if (layer==='F') return rz>0?'F':'Fi';
-    else             return rz>0?'Bi':'B';
+    if (cz=== 1) return rz>0?'F':'Fi';
+    if (cz===-1) return rz>0?'Bi':'B';
+    return rz>0?'F':'Fi';
   }
   return null;
 }
 
-// ─── INPUT HANDLERS ───────────────────────────────────────────
-var DRAG_THRESHOLD = 8; // px — kolik musíš táhnout než se rozhodne orbit vs turn
-
-function onPointerDown(clientX, clientY) {
-  var hit = raycastCube(clientX, clientY);
-  dragState = {
-    mode: 'undecided',
-    startX: clientX, startY: clientY,
-    hit: hit,
-    moved: false,
-  };
+function onDown(cx,cy) {
+  dragState={ mode:'undecided', sx:cx, sy:cy, lx:cx, ly:cy, hit:raycast(cx,cy) };
 }
-
-function onPointerMove(clientX, clientY) {
+function onMove(cx,cy) {
   if (!dragState) return;
-
-  var dx = clientX - dragState.startX;
-  var dy = clientY - dragState.startY;
-  var dist = Math.sqrt(dx*dx + dy*dy);
-
-  if (dragState.mode === 'undecided') {
-    if (dist < DRAG_THRESHOLD) return; // čekáme
-    // Rozhodnutí: je pod prstem kubie? → turn, jinak orbit
+  var dx=cx-dragState.sx, dy=cy-dragState.sy;
+  if (dragState.mode==='undecided' && Math.sqrt(dx*dx+dy*dy)>=DRAG_THR)
     dragState.mode = dragState.hit ? 'turn' : 'orbit';
-    dragState.lastX = dragState.startX;
-    dragState.lastY = dragState.startY;
+  if (dragState.mode==='orbit') {
+    rotY -= (cx-dragState.lx)*0.006;
+    rotX += (cy-dragState.ly)*0.006;
+    rotX=Math.max(-1.4,Math.min(1.4,rotX));
   }
-
-  var ldx = clientX - dragState.lastX;
-  var ldy = clientY - dragState.lastY;
-  dragState.lastX = clientX;
-  dragState.lastY = clientY;
-
-  if (dragState.mode === 'orbit') {
-    rotY -= ldx * 0.006;
-    rotX += ldy * 0.006;
-    rotX = Math.max(-1.4, Math.min(1.4, rotX));
-  }
-  // turn se provede při pointerUp pro jistotu
+  dragState.lx=cx; dragState.ly=cy;
 }
-
-function onPointerUp(clientX, clientY) {
+function onUp(cx,cy) {
   if (!dragState) return;
-
-  var dx = clientX - dragState.startX;
-  var dy = clientY - dragState.startY;
-  var dist = Math.sqrt(dx*dx + dy*dy);
-
-  if (dragState.mode === 'turn' && dist >= DRAG_THRESHOLD && dragState.hit) {
-    var mv = inferMove2(dragState.hit.normal, dx, dy, dragState.hit.cubie);
+  var dx=cx-dragState.sx, dy=cy-dragState.sy;
+  if (dragState.mode==='turn' && Math.sqrt(dx*dx+dy*dy)>=DRAG_THR && dragState.hit) {
+    var mv=inferMove(dragState.hit.normal, dx, dy, dragState.hit.cubie);
     if (mv) doMove(mv);
   }
-
-  dragState = null;
+  dragState=null;
 }
 
 // Mouse
-renderer.domElement.addEventListener('mousedown', function(e) {
-  onPointerDown(e.clientX, e.clientY);
-});
-window.addEventListener('mousemove', function(e) {
-  onPointerMove(e.clientX, e.clientY);
-});
-window.addEventListener('mouseup', function(e) {
-  onPointerUp(e.clientX, e.clientY);
-});
+renderer.domElement.addEventListener('mousedown', function(e){ onDown(e.clientX,e.clientY); });
+window.addEventListener('mousemove', function(e){ onMove(e.clientX,e.clientY); });
+window.addEventListener('mouseup',   function(e){ onUp(e.clientX,e.clientY); });
 
-// Touch
-renderer.domElement.addEventListener('touchstart', function(e) {
+// Touch — na canvasu preventDefault aby se nezoomovalo
+renderer.domElement.addEventListener('touchstart', function(e){
   e.preventDefault();
-  onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
-}, { passive:false });
-window.addEventListener('touchmove', function(e) {
+  onDown(e.touches[0].clientX, e.touches[0].clientY);
+},{passive:false});
+renderer.domElement.addEventListener('touchmove', function(e){
   e.preventDefault();
-  onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-}, { passive:false });
-window.addEventListener('touchend', function(e) {
+  onMove(e.touches[0].clientX, e.touches[0].clientY);
+},{passive:false});
+renderer.domElement.addEventListener('touchend', function(e){
   e.preventDefault();
-  var t = e.changedTouches[0];
-  onPointerUp(t.clientX, t.clientY);
-}, { passive:false });
+  var t=e.changedTouches[0];
+  onUp(t.clientX, t.clientY);
+},{passive:false});
 
-// ─── RENDER LOOP ──────────────────────────────────────────────
+// ── Render loop ──────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
   camera.position.set(
-    CAM_R * Math.sin(rotY) * Math.cos(rotX),
-    CAM_R * Math.sin(rotX),
-    CAM_R * Math.cos(rotY) * Math.cos(rotX)
+    CAM_R*Math.sin(rotY)*Math.cos(rotX),
+    CAM_R*Math.sin(rotX),
+    CAM_R*Math.cos(rotY)*Math.cos(rotX)
   );
   camera.lookAt(0,0,0);
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 buildCube();
